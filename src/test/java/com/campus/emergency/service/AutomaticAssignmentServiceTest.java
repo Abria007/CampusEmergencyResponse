@@ -13,6 +13,7 @@ import com.campus.emergency.service.IncidentService;
 import com.campus.emergency.service.AutomaticAssignmentService;
 import com.campus.emergency.service.AuthService;
 
+import org.mindrot.jbcrypt.BCrypt;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
@@ -45,15 +46,13 @@ class AutomaticAssignmentServiceTest {
         assertTrue(authService.register(
                 reporterUsername, "Password123!", "REPORTER"));
 
-        assertTrue(authService.register(
-                nearUsername, "Password123!", "RESPONDER"));
-
-        assertTrue(authService.register(
-                farUsername, "Password123!", "RESPONDER"));
-
         User reporter = userDAO.findByUsername(reporterUsername);
-        User nearUser = userDAO.findByUsername(nearUsername);
-        User farUser = userDAO.findByUsername(farUsername);
+
+        User nearUser = createResponderUser(
+                userDAO, nearUsername, "Password123!");
+
+        User farUser = createResponderUser(
+                userDAO, farUsername, "Password123!");
 
         assertNotNull(reporter);
         assertNotNull(nearUser);
@@ -169,5 +168,20 @@ class AutomaticAssignmentServiceTest {
                 return resultSet.getInt("id");
             }
         }
+    }
+
+    private User createResponderUser(
+            UserDAO userDAO, String username, String password)
+            throws SQLException {
+
+        String passwordHash = BCrypt.hashpw(
+                password, BCrypt.gensalt(12));
+
+        User responder = new User(
+                0, username, passwordHash, "RESPONDER", true);
+
+        assertTrue(userDAO.createUser(responder));
+
+        return userDAO.findByUsername(username);
     }
 }

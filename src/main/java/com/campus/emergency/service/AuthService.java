@@ -6,40 +6,47 @@ import com.campus.emergency.model.User;
 import org.mindrot.jbcrypt.BCrypt;
 
 import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 public class AuthService {
 
     private final UserDAO userDAO;
 
-    private static final Set<String> VALID_ROLES =
-            new HashSet<>(Arrays.asList(
-                    "ADMIN",
-                    "RESPONDER",
-                    "REPORTER"
-            ));
-
     public AuthService() {
         this.userDAO = new UserDAO();
     }
 
-    public boolean register(String username, String password, String role)
+    // Public registration: users can register only as REPORTER.
+    public boolean register(String username, String password)
             throws SQLException {
 
+        return register(username, password, "REPORTER");
+    }
+
+    // Keep the existing method signature for compatibility,
+    // but prevent public registration with privileged roles.
+    public boolean register(
+            String username,
+            String password,
+            String role
+    ) throws SQLException {
+
+        if (role == null ||
+                !"REPORTER".equalsIgnoreCase(role.trim())) {
+            throw new IllegalArgumentException(
+                    "Public registration is allowed only for REPORTER accounts."
+            );
+        }
+
         if (username == null || username.trim().isEmpty()) {
-            throw new IllegalArgumentException("Username cannot be empty.");
+            throw new IllegalArgumentException(
+                    "Username cannot be empty."
+            );
         }
 
         if (password == null || password.length() < 8) {
             throw new IllegalArgumentException(
                     "Password must contain at least 8 characters."
             );
-        }
-
-        if (role == null || !VALID_ROLES.contains(role)) {
-            throw new IllegalArgumentException("Invalid user role.");
         }
 
         username = username.trim();
@@ -57,7 +64,7 @@ public class AuthService {
                 0,
                 username,
                 passwordHash,
-                role,
+                "REPORTER",
                 true
         );
 

@@ -2,6 +2,7 @@
 package com.campus.emergency.service;
 
 import org.junit.jupiter.api.Test;
+import org.mindrot.jbcrypt.BCrypt;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -96,12 +97,10 @@ class IncidentServiceTest {
                 reporterUsername, "Reporter@123", "REPORTER"
         ));
 
-        assertTrue(authService.register(
-                responderUsername, "Responder@123", "RESPONDER"
-        ));
-
         User reporter = userDAO.findByUsername(reporterUsername);
-        User responderUser = userDAO.findByUsername(responderUsername);
+
+        User responderUser = createResponderUser(
+                userDAO, responderUsername, "Responder@123");
 
         assertNotNull(reporter);
         assertNotNull(responderUser);
@@ -222,12 +221,10 @@ class IncidentServiceTest {
                 reporterUsername, "Password123!", "REPORTER"
         ));
 
-        assertTrue(authService.register(
-                responderUsername, "Password123!", "RESPONDER"
-        ));
-
         User reporter = userDAO.findByUsername(reporterUsername);
-        User responderUser = userDAO.findByUsername(responderUsername);
+
+        User responderUser = createResponderUser(
+                userDAO, responderUsername, "Password123!");
 
         assertNotNull(reporter);
         assertNotNull(responderUser);
@@ -348,5 +345,20 @@ class IncidentServiceTest {
         assertNotNull(savedSecondIncident);
         assertEquals("REPORTED", savedSecondIncident.getStatus());
         assertNull(savedSecondIncident.getAssignedResponderId());
+    }
+
+    private User createResponderUser(
+            UserDAO userDAO, String username, String password)
+            throws SQLException {
+
+        String passwordHash = BCrypt.hashpw(
+                password, BCrypt.gensalt(12));
+
+        User responder = new User(
+                0, username, passwordHash, "RESPONDER", true);
+
+        assertTrue(userDAO.createUser(responder));
+
+        return userDAO.findByUsername(username);
     }
 }
