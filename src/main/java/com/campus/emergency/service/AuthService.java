@@ -71,9 +71,7 @@ public class AuthService {
         return userDAO.createUser(user);
     }
 
-    public User login(String username, String password)
-            throws SQLException {
-
+    public User login(String username, String password) throws SQLException {
         if (username == null || password == null) {
             return null;
         }
@@ -85,14 +83,24 @@ public class AuthService {
         }
 
         boolean passwordMatches = BCrypt.checkpw(
-                password,
-                user.getPasswordHash()
-        );
+                password, user.getPasswordHash());
 
         if (passwordMatches) {
             return user;
         }
 
         return null;
+    }
+
+    public AuthenticatedSession loginSession(
+            String username, String password) throws SQLException {
+
+        User user = login(username, password);
+
+        if (user == null) {
+            return null;
+        }
+
+        return new AuthenticatedSession(user);
     }
 }

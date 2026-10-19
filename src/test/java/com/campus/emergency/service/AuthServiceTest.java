@@ -1,6 +1,6 @@
 
 package com.campus.emergency.service;
-
+import java.sql.SQLException;
 import com.campus.emergency.model.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +37,16 @@ class AuthServiceTest {
     }
 
     @Test
+    void failedLoginDoesNotCreateAuthenticatedSession() throws SQLException {
+        AuthService authService = new AuthService();
+
+        AuthenticatedSession session = authService.loginSession(
+                "nonexistent_user_12345", "WrongPassword123!");
+
+        assertNull(session);
+    }
+
+    @Test
     void testIncorrectPasswordIsRejected() throws SQLException {
         String username = "test_" + UUID.randomUUID();
 
@@ -63,5 +73,24 @@ class AuthServiceTest {
 
         assertTrue(firstRegistration);
         assertFalse(secondRegistration);
+    }
+
+    @Test
+    void successfulLoginCreatesAuthenticatedSession() throws SQLException {
+        String username = "session_test_" +
+                java.util.UUID.randomUUID().toString().substring(0, 8);
+
+        AuthService authService = new AuthService();
+
+        assertTrue(authService.register(
+                username, "Password123!", "REPORTER"));
+
+        AuthenticatedSession session = authService.loginSession(
+                username, "Password123!");
+
+        assertNotNull(session);
+        assertEquals(username, session.getUsername());
+        assertEquals("REPORTER", session.getRole());
+        assertTrue(session.isActive());
     }
 }

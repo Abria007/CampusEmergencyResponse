@@ -6,6 +6,7 @@ import com.campus.emergency.model.Responder;
 import com.campus.emergency.dao.IncidentDAO;
 import com.campus.emergency.model.Incident;
 import com.campus.emergency.dao.AssignmentDAO;
+import com.campus.emergency.model.User;
 
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -15,6 +16,9 @@ import java.util.Set;
 public class IncidentService {
 
     private final IncidentDAO incidentDAO;
+
+    private final AuthorizationService authorizationService =
+            new AuthorizationService();
 
     private static final Set<String> VALID_CATEGORIES =
             new HashSet<>(Arrays.asList(
@@ -41,7 +45,7 @@ public class IncidentService {
         this.incidentDAO = incidentDAO;
     }
 
-    public boolean reportIncident(
+    boolean reportIncident(
             int reportedBy,
             String category,
             String description,
@@ -113,7 +117,7 @@ public class IncidentService {
         }
     }
 
-    public boolean assignResponder(
+    boolean assignResponder(
             int incidentId,
             int responderId
     ) throws SQLException {
@@ -161,7 +165,7 @@ public class IncidentService {
         );
     }
 
-    public boolean startIncident(int incidentId)
+    boolean startIncident(int incidentId)
             throws SQLException {
 
         if (incidentId <= 0) {
@@ -187,7 +191,7 @@ public class IncidentService {
         return incidentDAO.startIncident(incidentId);
     }
 
-    public boolean resolveIncident(
+    boolean resolveIncident(
             int incidentId,
             String resolutionNotes
     ) throws SQLException {
@@ -223,5 +227,107 @@ public class IncidentService {
                 incidentId,
                 resolutionNotes.trim()
         );
+    }
+
+    public boolean reportIncident(
+            AuthenticatedSession session,
+            String category,
+            String description,
+            int locationId) throws SQLException {
+
+        if (session == null) {
+            throw new SecurityException(
+                    "Authentication is required.");
+        }
+
+        authorizationService.requireRole(
+                session.getUser(), "REPORTER");
+
+        return reportIncident(
+                session.getUserId(),
+                category,
+                description,
+                locationId);
+
+    }
+
+    public boolean assignResponder(
+            AuthenticatedSession session,
+            int incidentId,
+            int responderId) throws SQLException {
+
+        if (session == null) {
+            throw new SecurityException(
+                    "Authentication is required.");
+        }
+
+        authorizationService.requireRole(
+                session.getUser(), "ADMIN");
+
+        return assignResponder(incidentId, responderId);
+    }
+
+    public boolean startIncident(
+            AuthenticatedSession session,
+            int incidentId) throws SQLException {
+
+        if (session == null) {
+            throw new SecurityException(
+                    "Authentication is required.");
+        }
+
+        authorizationService.requireRole(
+                session.getUser(), "RESPONDER");
+
+        ResponderDAO responderDAO = new ResponderDAO();
+        Incident incident = incidentDAO.findById(incidentId);
+
+        if (incident == null ||
+                incident.getAssignedResponderId() == null) {
+            return false;
+        }
+
+        Responder assignedResponder = responderDAO.findById(
+                incident.getAssignedResponderId());
+
+        if (assignedResponder == null ||
+                assignedResponder.getUserId() != session.getUserId()) {
+            throw new SecurityException(
+                    "You can only start incidents assigned to you.");
+        }
+
+        return startIncident(incidentId);
+    }
+    public boolean resolveIncident(
+            AuthenticatedSession session,
+            int incidentId,
+            String resolutionNotes) throws SQLException {
+
+        if (session == null) {
+            throw new SecurityException(
+                    "Authentication is required.");
+        }
+
+        authorizationService.requireRole(
+                session.getUser(), "RESPONDER");
+
+        ResponderDAO responderDAO = new ResponderDAO();
+        Incident incident = incidentDAO.findById(incidentId);
+
+        if (incident == null ||
+                incident.getAssignedResponderId() == null) {
+            return false;
+        }
+
+        Responder assignedResponder = responderDAO.findById(
+                incident.getAssignedResponderId());
+
+        if (assignedResponder == null ||
+                assignedResponder.getUserId() != session.getUserId()) {
+            throw new SecurityException(
+                    "You can only resolve incidents assigned to you.");
+        }
+
+        return resolveIncident(incidentId, resolutionNotes);
     }
 }
