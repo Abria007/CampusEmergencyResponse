@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-
 import com.campus.emergency.dao.IncidentDAO;
 import com.campus.emergency.dao.ResponderDAO;
 import com.campus.emergency.dao.UserDAO;
@@ -17,6 +16,7 @@ import com.campus.emergency.model.User;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.UUID;
 
 class IncidentServiceTest {
@@ -80,7 +80,6 @@ class IncidentServiceTest {
         );
     }
 
-
     @Test
     void testReportAndAssignIncident() throws Exception {
 
@@ -93,14 +92,13 @@ class IncidentServiceTest {
         String reporterUsername = "reporter_" + uniqueId;
         String responderUsername = "responder_" + uniqueId;
 
-        // 1. Create separate reporter and responder accounts.
-        authService.register(
+        assertTrue(authService.register(
                 reporterUsername, "Reporter@123", "REPORTER"
-        );
+        ));
 
-        authService.register(
+        assertTrue(authService.register(
                 responderUsername, "Responder@123", "RESPONDER"
-        );
+        ));
 
         User reporter = userDAO.findByUsername(reporterUsername);
         User responderUser = userDAO.findByUsername(responderUsername);
@@ -108,7 +106,6 @@ class IncidentServiceTest {
         assertNotNull(reporter);
         assertNotNull(responderUser);
 
-        // 2. Create a unique campus location.
         int locationId;
 
         try (Connection connection = DatabaseConnection.getConnection();
@@ -134,7 +131,6 @@ class IncidentServiceTest {
             }
         }
 
-        // 3. Add an available security responder.
         int responderId;
 
         try (Connection connection = DatabaseConnection.getConnection();
@@ -163,9 +159,6 @@ class IncidentServiceTest {
             }
         }
 
-        // 4. Report a fire incident.
-        IncidentService incidentService = new IncidentService();
-
         assertTrue(incidentService.reportIncident(
                 reporter.getId(),
                 "FIRE",
@@ -173,12 +166,13 @@ class IncidentServiceTest {
                 locationId
         ));
 
-        // 5. Find the newly created incident.
         IncidentDAO incidentDAO = new IncidentDAO();
         Incident incident = null;
 
         for (Incident item : incidentDAO.findAll()) {
-            if (item.getReportedBy() == reporter.getId()) {
+            if (item.getReportedBy() == reporter.getId()
+                    && ("Smoke detected near the laboratory")
+                    .equals(item.getDescription())) {
                 incident = item;
                 break;
             }
@@ -188,12 +182,10 @@ class IncidentServiceTest {
         assertEquals("CRITICAL", incident.getPriority());
         assertEquals("REPORTED", incident.getStatus());
 
-        // 6. Assign the responder.
         assertTrue(incidentService.assignResponder(
                 incident.getId(), responderId
         ));
 
-        // 7. Verify the final incident status and assigned responder.
         Incident updatedIncident =
                 incidentDAO.findById(incident.getId());
 
@@ -204,7 +196,6 @@ class IncidentServiceTest {
                 updatedIncident.getAssignedResponderId()
         );
 
-        // 8. Verify that the responder is now unavailable.
         ResponderDAO responderDAO = new ResponderDAO();
         Responder updatedResponder =
                 responderDAO.findById(responderId);
@@ -213,4 +204,149 @@ class IncidentServiceTest {
         assertFalse(updatedResponder.isAvailable());
     }
 
+    @Test
+    void testFailedAssignmentDoesNotMakeResponderUnavailable()
+            throws SQLException {
+
+        String suffix = UUID.randomUUID().toString()
+                .substring(0, 8);
+
+        AuthService authService = new AuthService();
+        UserDAO userDAO = new UserDAO();
+        ResponderDAO responderDAO = new ResponderDAO();
+
+        String reporterUsername = "rollback_reporter_" + suffix;
+        String responderUsername = "rollback_responder_" + suffix;
+
+        assertTrue(authService.register(
+                reporterUsername, "Password123!", "REPORTER"
+        ));
+
+        assertTrue(authService.register(
+                responderUsername, "Password123!", "RESPONDER"
+        ));
+
+        User reporter = userDAO.findByUsername(reporterUsername);
+        User responderUser = userDAO.findByUsername(responderUsername);
+
+        assertNotNull(reporter);
+        assertNotNull(responderUser);
+
+        int locationId;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "INSERT INTO locations " +
+                             "(building, floor, room, latitude, longitude) " +
+                             "VALUES (?, ?, ?, ?, ?)")) {
+
+            statement.setString(1, "Rollback_" + suffix);
+            statement.setString(2, "1");
+            statement.setString(3, "101");
+            statement.setDouble(4, 11.0168);
+            statement.setDouble(5, 76.9558);
+            statement.executeUpdate();
+        }
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT id FROM locations WHERE building = ?")) {
+
+            statement.setString(1, "Rollback_" + suffix);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertTrue(resultSet.next());
+                locationId = resultSet.getInt("id");
+            }
+        }
+
+        int responderId;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "INSERT INTO responders " +
+                             "(user_id, name, responder_type, " +
+                             "location_id, is_available) " +
+                             "VALUES (?, ?, ?, ?, 1)")) {
+
+            statement.setInt(1, responderUser.getId());
+            statement.setString(2, "Rollback Responder " + suffix);
+            statement.setString(3, "SECURITY");
+            statement.setInt(4, locationId);
+            statement.executeUpdate();
+        }
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT id FROM responders WHERE user_id = ?")) {
+
+            statement.setInt(1, responderUser.getId());
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertTrue(resultSet.next());
+                responderId = resultSet.getInt("id");
+            }
+        }
+
+        assertTrue(incidentService.reportIncident(
+                reporter.getId(),
+                "SECURITY",
+                "First incident " + suffix,
+                locationId
+        ));
+
+        assertTrue(incidentService.reportIncident(
+                reporter.getId(),
+                "SECURITY",
+                "Second incident " + suffix,
+                locationId
+        ));
+
+        IncidentDAO incidentDAO = new IncidentDAO();
+
+        Incident firstIncident = null;
+        Incident secondIncident = null;
+
+        for (Incident item : incidentDAO.findAll()) {
+            if (item.getReportedBy() == reporter.getId()) {
+                if (("First incident " + suffix)
+                        .equals(item.getDescription())) {
+                    firstIncident = item;
+                } else if (("Second incident " + suffix)
+                        .equals(item.getDescription())) {
+                    secondIncident = item;
+                }
+            }
+        }
+
+        assertNotNull(firstIncident);
+        assertNotNull(secondIncident);
+
+        final Incident first = firstIncident;
+        final Incident second = secondIncident;
+
+        assertTrue(incidentService.assignResponder(
+                first.getId(), responderId
+        ));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> incidentService.assignResponder(
+                        second.getId(), responderId
+                )
+        );
+
+        Responder savedResponder =
+                responderDAO.findById(responderId);
+
+        assertNotNull(savedResponder);
+        assertFalse(savedResponder.isAvailable());
+
+        Incident savedSecondIncident =
+                incidentDAO.findById(secondIncident.getId());
+
+        assertNotNull(savedSecondIncident);
+        assertEquals("REPORTED", savedSecondIncident.getStatus());
+        assertNull(savedSecondIncident.getAssignedResponderId());
+    }
 }
