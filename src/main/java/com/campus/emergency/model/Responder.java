@@ -48,4 +48,9 @@ public class Responder {
     public void setAvailable(boolean available) {
         this.available = available;
     }
+
+    public boolean canHandleCategory(String category) {
+        return false;
+    }
+
 }

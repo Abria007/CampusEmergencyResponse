@@ -3,6 +3,7 @@ package com.campus.emergency.dao;
 
 import com.campus.emergency.database.DatabaseConnection;
 import com.campus.emergency.model.Responder;
+import com.campus.emergency.model.ResponderFactory;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -63,8 +64,10 @@ public class ResponderDAO {
         }
     }
 
-    private Responder mapResponder(ResultSet resultSet) throws SQLException {
-        return new Responder(
+
+    private Responder mapResponder(ResultSet resultSet)
+            throws SQLException {
+        return ResponderFactory.createResponder(
                 resultSet.getInt("id"),
                 resultSet.getInt("user_id"),
                 resultSet.getString("name"),
@@ -73,4 +76,5 @@ public class ResponderDAO {
                 resultSet.getInt("is_available") == 1
         );
     }
+
 }

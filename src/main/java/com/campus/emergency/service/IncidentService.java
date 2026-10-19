@@ -4,6 +4,7 @@ import com.campus.emergency.dao.ResponderDAO;
 import com.campus.emergency.model.Responder;
 import com.campus.emergency.dao.IncidentDAO;
 import com.campus.emergency.model.Incident;
+import com.campus.emergency.dao.AssignmentDAO;
 
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -128,14 +129,10 @@ public class IncidentService {
             );
         }
 
-        boolean assigned =
-                incidentDAO.assignResponder(incidentId, responderId);
+        AssignmentDAO assignmentDAO = new AssignmentDAO();
 
-        if (assigned) {
-            responderDAO.updateAvailability(responderId, false);
-        }
-
-        return assigned;
+        return assignmentDAO.assignResponderAtomically(
+                incidentId, responderId);
     }
 
 }
