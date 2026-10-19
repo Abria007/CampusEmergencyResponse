@@ -1,5 +1,6 @@
 
 package com.campus.emergency.service;
+
 import com.campus.emergency.dao.ResponderDAO;
 import com.campus.emergency.model.Responder;
 import com.campus.emergency.dao.IncidentDAO;
@@ -24,24 +25,43 @@ public class IncidentService {
                     "WATER"
             ));
 
+    // Constructor used by the real application.
     public IncidentService() {
-        incidentDAO = new IncidentDAO();
+        this(new IncidentDAO());
     }
 
-    public boolean reportIncident(int reportedBy, String category,
-                                  String description, int locationId)
-            throws SQLException {
+    // Constructor used by unit tests.
+    public IncidentService(IncidentDAO incidentDAO) {
+        if (incidentDAO == null) {
+            throw new IllegalArgumentException(
+                    "IncidentDAO cannot be null."
+            );
+        }
+
+        this.incidentDAO = incidentDAO;
+    }
+
+    public boolean reportIncident(
+            int reportedBy,
+            String category,
+            String description,
+            int locationId
+    ) throws SQLException {
 
         if (reportedBy <= 0) {
-            throw new IllegalArgumentException("Invalid reporter ID.");
+            throw new IllegalArgumentException(
+                    "Invalid reporter ID."
+            );
         }
 
         if (category == null ||
-                !VALID_CATEGORIES.contains(category)) {
+                !VALID_CATEGORIES.contains(category.trim().toUpperCase())) {
             throw new IllegalArgumentException(
                     "Invalid incident category."
             );
         }
+
+        category = category.trim().toUpperCase();
 
         if (description == null || description.trim().isEmpty()) {
             throw new IllegalArgumentException(
@@ -50,7 +70,9 @@ public class IncidentService {
         }
 
         if (locationId <= 0) {
-            throw new IllegalArgumentException("Invalid location ID.");
+            throw new IllegalArgumentException(
+                    "Invalid location ID."
+            );
         }
 
         String priority = determinePriority(category);
@@ -71,6 +93,7 @@ public class IncidentService {
     }
 
     private String determinePriority(String category) {
+
         switch (category) {
             case "FIRE":
             case "MEDICAL":
@@ -90,9 +113,10 @@ public class IncidentService {
         }
     }
 
-
-    public boolean assignResponder(int incidentId, int responderId)
-            throws SQLException {
+    public boolean assignResponder(
+            int incidentId,
+            int responderId
+    ) throws SQLException {
 
         if (incidentId <= 0 || responderId <= 0) {
             throw new IllegalArgumentException(
@@ -132,7 +156,72 @@ public class IncidentService {
         AssignmentDAO assignmentDAO = new AssignmentDAO();
 
         return assignmentDAO.assignResponderAtomically(
-                incidentId, responderId);
+                incidentId,
+                responderId
+        );
     }
 
+    public boolean startIncident(int incidentId)
+            throws SQLException {
+
+        if (incidentId <= 0) {
+            throw new IllegalArgumentException(
+                    "Incident ID must be positive."
+            );
+        }
+
+        Incident incident = incidentDAO.findById(incidentId);
+
+        if (incident == null) {
+            throw new IllegalArgumentException(
+                    "Incident not found."
+            );
+        }
+
+        if (!"ASSIGNED".equals(incident.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Only assigned incidents can be started."
+            );
+        }
+
+        return incidentDAO.startIncident(incidentId);
+    }
+
+    public boolean resolveIncident(
+            int incidentId,
+            String resolutionNotes
+    ) throws SQLException {
+
+        if (incidentId <= 0) {
+            throw new IllegalArgumentException(
+                    "Incident ID must be positive."
+            );
+        }
+
+        if (resolutionNotes == null ||
+                resolutionNotes.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Resolution notes cannot be empty."
+            );
+        }
+
+        Incident incident = incidentDAO.findById(incidentId);
+
+        if (incident == null) {
+            throw new IllegalArgumentException(
+                    "Incident not found."
+            );
+        }
+
+        if (!"IN_PROGRESS".equals(incident.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Only in-progress incidents can be resolved."
+            );
+        }
+
+        return incidentDAO.resolveIncident(
+                incidentId,
+                resolutionNotes.trim()
+        );
+    }
 }

@@ -142,5 +142,68 @@ public class IncidentDAO {
 
         return incidents;
     }
+    public List<Incident> findReportedIncidents() throws SQLException {
+
+        List<Incident> incidents = new ArrayList<>();
+
+        String sql = """
+            SELECT *
+            FROM incidents
+            WHERE status = 'REPORTED'
+            """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet resultSet = statement.executeQuery()) {
+
+            while (resultSet.next()) {
+                incidents.add(mapIncident(resultSet));
+            }
+        }
+
+        return incidents;
+    }
+
+    public boolean startIncident(int incidentId) throws SQLException {
+
+        String sql = """
+            UPDATE incidents
+            SET status = 'IN_PROGRESS'
+            WHERE id = ?
+              AND status = 'ASSIGNED'
+            """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setInt(1, incidentId);
+
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    public boolean resolveIncident(
+            int incidentId,
+            String resolutionNotes
+    ) throws SQLException {
+
+        String sql = """
+            UPDATE incidents
+            SET status = 'RESOLVED',
+                resolution_notes = ?,
+                resolved_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+              AND status = 'IN_PROGRESS'
+            """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, resolutionNotes);
+            statement.setInt(2, incidentId);
+
+            return statement.executeUpdate() == 1;
+        }
+    }
 
 }
